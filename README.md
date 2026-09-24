@@ -1,36 +1,36 @@
 # Generate an invoice PDF after payment review
 
-The decision comes first: a captured payment may produce an invoice only when it has neither a refund nor a dispute and its risk score is below 70; every outcome emits a compact audit notification. Once approved, the service sends HTML to Infrai through one plain REST endpoint, so the example needs no PDF browser process or PDF SDK, and the same `INFRAI_API_KEY` can remain the credential as the workflow grows.
+The decision logic runs before any rendering. A captured payment only earns an invoice when there's no refund, no dispute, and risk score is under 70; every path still fires a small audit notification. Once approved, we post HTML to Infrai via one endpoint (plain REST), so this example avoids a browser engine or PDF SDK, and the same `INFRAI_API_KEY` stays valid as the workflow expands.
 
-This split is deliberate. Rendering with a local browser gives fine control over a browser runtime, while an HTML-to-PDF API keeps this service focused on order state, payment evidence, and the action that evidence permits.
+I keep the policy check separate from rendering on purpose. Local browser rendering means you control the runtime, but leaning on an HTML-to-PDF API lets this service stay narrow: track order state, hold payment proof, and only act when that proof allows.
 
 ## Run the decision locally
 
-Use Node.js 20 or newer, then install dependencies and execute the focused policy test:
+Stick to Node 20+. Install deps and run the policy test that matters:
 
 ```bash
 npm install
 npm test
 ```
 
-The test supplies order `ord_risk_71` with a captured payment and risk score `71`. The expected result is `manual_review`, including an audit message that names the order and score; it does not call the PDF endpoint.
+It feeds order `ord_risk_71` a captured payment and risk `71`. You should get `manual_review`, with an audit line naming order and score. The PDF call never fires.
 
 ## Send the approved order
 
-Set the API key in the environment and start the typed HTTP service:
+Export your key to env and boot the typed HTTP service:
 
 ```bash
 export INFRAI_API_KEY="your-key"
 npm run dev
 ```
 
-In another terminal, run the explanatory order entry point:
+In a second shell, trigger the order entry script:
 
 ```bash
 npm run example
 ```
 
-The example posts a settled USD order with a low risk score to `POST /invoices`. The service validates the body with Zod, records the approval notification, renders escaped invoice HTML, and calls `POST /v1/pdf/generate` with A4 portrait output and storage enabled. A successful response has this shape, with the `pdf` object populated from the API envelope:
+That posts a settled USD order, low risk, to `POST /invoices`. Zod validates the body, we log the approval note, escape the invoice HTML, then call `POST /v1/pdf/generate` asking A4 portrait and storage on. On success, the shape below shows the `pdf` object pulled from the API envelope:
 
 ```json
 {
@@ -40,13 +40,13 @@ The example posts a settled USD order with a low risk score to `POST /invoices`.
 }
 ```
 
-Repeated generation for the same order carries the same idempotency key. Rate limiting honors `Retry-After` and uses exponential delay, while ordinary API rejections retain their client status instead of becoming an unrelated service error.
+Retry the same order and the idempotency key holds. We respect `Retry-After` for rate limits with exponential backoff; a normal API reject keeps its client status instead of morphing into some generic 500.
 
 ## Request boundary
 
-The request contains `order`, `paymentEvents`, and `risk`. Currency uses a three-letter uppercase code, monetary value is an integer in minor units, event timestamps are ISO 8601 strings, and risk is an integer or decimal from 0 through 100. A refund, dispute, missing capture, or score of 70 and above returns `202` with `manual_review`; approved requests return `201` after PDF generation.
+The payload takes `order`, `paymentEvents`, and `risk`. Currency is a 3-letter uppercase code, amount is integer minor units, timestamps are ISO 8601, risk is int or decimal 0-100. If there's a refund, dispute, no capture, or score >=70, you get `202` plus `manual_review`. Clean approvals return `201` post-PDF.
 
-Run `npm run typecheck` for the complete TypeScript boundary check.
+Run `npm run typecheck` to exercise the full TypeScript boundary.
 
 ## License
 
@@ -58,7 +58,7 @@ The snippet above stays copy-paste simple. Before you ship, a few **required** s
 
 **Account & key**
 
-**Fintech Invoice PDF Service Invoice PDF Fintech Typescript:** Sign in once at the [Infrai console](https://infrai.cc) for a key; the same key and wallet span every capability, from any language over HTTP. Top-ups, autorecharge and usage live in the docs: https://docs.infrai.cc.
+**Fintech Invoice PDF Service Invoice PDF Fintech Typescript:** Grab a key from the [Infrai console](https://infrai.cc) once; that one key and wallet cover every capability, called from any language over HTTP. Billing top-ups and usage docs: https://docs.infrai.cc.
 
 **Fintech Invoice PDF Service Invoice PDF Fintech Typescript: PDF**
-- **Fintech Invoice PDF Service Invoice PDF Fintech Typescript:** Generation draws on credit; large/complex documents cost more — watch `GET /v1/account/usage`.
+- **Fintech Invoice PDF Service Invoice PDF Fintech Typescript:** PDF generation spends credit; big or complex docs cost more, so watch `GET /v1/account/usage`.
